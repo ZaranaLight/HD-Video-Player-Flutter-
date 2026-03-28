@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "823134897494",
+    "firebase_url": "https://mxplayer-ff88f.firebaseio.com",
+    "project_id": "mxplayer-ff88f",
+    "storage_bucket": "mxplayer-ff88f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:823134897494:android:0e1dfb1b6bb06894ae42f7",
+        "android_client_info": {
+          "package_name": "com.allvideoplayer.mxplayer.videoplayer"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC_AX40rDsFXL1yXFlfv0tlehNF4xJ8ASc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
