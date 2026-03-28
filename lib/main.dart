@@ -9,6 +9,7 @@ import 'models/media_folder.dart';
 import 'screens/media_list_screen.dart';
 import 'screens/wishlist_screen.dart';
 import 'screens/ease_cleaner_screen.dart';
+import 'bloc/cleaner_cubit.dart';
 import 'services/ads_service.dart';
 import 'services/remote_config_service.dart';
 import 'services/session_service.dart';
@@ -85,6 +86,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       providers: [
         BlocProvider(create: (context) => MediaBloc()..add(LoadMediaFolders())),
         BlocProvider(create: (context) => NavBloc()),
+        BlocProvider(create: (context) => CleanerCubit()..loadAssets()),
       ],
       child: MaterialApp(
         title: 'MX Player Clone',

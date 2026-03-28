@@ -20,7 +20,7 @@ class AdsService {
       lineLength: 80,
       colors: true,
       printEmojis: true,
-      printTime: true,
+      dateTimeFormat: DateTimeFormat.onlyTimeAndSinceStart,
     ),
   );
 
@@ -28,11 +28,6 @@ class AdsService {
     await MobileAds.instance.initialize();
     loadInterstitialAd();
     loadAppOpenAd();
-  }
-
-  String getAdUnitId(String type, String fallback) {
-    String remoteId = _remoteConfigService.getAdUnitId(type);
-    return remoteId.isNotEmpty ? remoteId : fallback;
   }
 
   bool isAdEnabled(String type) {
@@ -44,38 +39,42 @@ class AdsService {
     final sessionCount = await _sessionService.getSessionCount();
     final frequency = _remoteConfigService.getFrequency(adType);
     
-    // Override: Always show on the very first launch (Session 1)
+    // Always show on first session OR if session matches frequency
     bool shouldShow = (sessionCount == 1) || (sessionCount % frequency) == 0 || frequency == 1;
 
     _logger.i('--- AD FREQUENCY CHECK ($adType) ---');
-    _logger.i('Type: $adType');
-    _logger.i('Session: $sessionCount');
-    _logger.i('Frequency: $frequency sessions');
-    _logger.i('Remaining: ${shouldShow ? 0 : (frequency - (sessionCount % frequency))} sessions');
-    _logger.i('Should Show: $shouldShow');
-    _logger.i('--------------------------------------');
+    _logger.i('Session: $sessionCount, Frequency: $frequency, Should Show: $shouldShow');
 
     return shouldShow;
   }
 
   // Interstitial Ad
   InterstitialAd? _interstitialAd;
+  bool _isInterstitialLoading = false;
   int _interstitialLoadAttempts = 0;
 
   void loadInterstitialAd() {
-    if (!isAdEnabled('interstitial')) return;
+    if (!isAdEnabled('interstitial') || _isInterstitialLoading || _interstitialAd != null) return;
+
+    _isInterstitialLoading = true;
+    String adUnitId = AdHelper.interstitialAdUnitId;
+    _logger.i('Loading Interstitial Ad with ID: $adUnitId');
 
     InterstitialAd.load(
-      adUnitId: getAdUnitId('interstitial', AdHelper.interstitialAdUnitId),
+      adUnitId: adUnitId,
       request: const AdRequest(),
       adLoadCallback: InterstitialAdLoadCallback(
         onAdLoaded: (ad) {
+          _logger.i('Interstitial Ad Loaded Successfully');
           _interstitialAd = ad;
+          _isInterstitialLoading = false;
           _interstitialLoadAttempts = 0;
         },
         onAdFailedToLoad: (error) {
-          _interstitialLoadAttempts++;
+          _logger.e('Interstitial Ad Failed to Load: ${error.message}');
+          _isInterstitialLoading = false;
           _interstitialAd = null;
+          _interstitialLoadAttempts++;
           if (_interstitialLoadAttempts <= 3) {
             loadInterstitialAd();
           }
@@ -88,36 +87,41 @@ class AdsService {
     required String trigger,
     required Function onAdClosed,
   }) async {
-    final isTriggerOk =
-        _remoteConfigService.isTriggerEnabled('interstitial', trigger);
+    final isTriggerOk = _remoteConfigService.isTriggerEnabled('interstitial', trigger);
     final shouldShow = await shouldShowAdByFrequency('InterstitialAd');
 
     _logger.i('--- INTERSTITIAL TRIGGER CHECK ---');
-    _logger.i('Trigger: $trigger');
-    _logger.i('Trigger Enabled: $isTriggerOk');
-    _logger.i('-----------------------------------');
+    _logger.i('Trigger: $trigger, Enabled: $isTriggerOk, Ad Ready: ${_interstitialAd != null}');
 
     if (!isTriggerOk || !shouldShow || _interstitialAd == null) {
-      if (!isTriggerOk)
-        _logger.w('Skipping Interstitial: Trigger "$trigger" not in list');
-      if (!shouldShow) _logger.w('Skipping Interstitial: Frequency cap');
+      if (!isTriggerOk) _logger.w('Skipping: Trigger "$trigger" not enabled in Remote Config');
+      if (!shouldShow) _logger.w('Skipping: Frequency cap not met');
+      if (_interstitialAd == null) {
+        _logger.w('Skipping: Interstitial Ad is NULL');
+        loadInterstitialAd(); 
+      }
       onAdClosed();
       return;
     }
 
     _interstitialAd!.fullScreenContentCallback = FullScreenContentCallback(
       onAdDismissedFullScreenContent: (ad) {
+        _logger.i('Interstitial Ad Dismissed');
         ad.dispose();
+        _interstitialAd = null;
         loadInterstitialAd();
         onAdClosed();
       },
       onAdFailedToShowFullScreenContent: (ad, error) {
+        _logger.e('Interstitial Ad Failed to Show: ${error.message}');
         ad.dispose();
+        _interstitialAd = null;
         loadInterstitialAd();
         onAdClosed();
       },
     );
 
+    _logger.i('Showing Interstitial Ad...');
     _interstitialAd!.show();
     _interstitialAd = null;
   }
@@ -125,19 +129,28 @@ class AdsService {
   // App Open Ad
   AppOpenAd? _appOpenAd;
   bool _isShowingAd = false;
+  bool _isAppOpenLoading = false;
 
   void loadAppOpenAd() {
-    if (!isAdEnabled('app_open')) return;
+    if (!isAdEnabled('app_open') || _isAppOpenLoading || _appOpenAd != null) return;
+
+    _isAppOpenLoading = true;
+    String adUnitId = AdHelper.appOpenAdUnitId;
+    _logger.i('Loading App Open Ad with ID: $adUnitId');
 
     AppOpenAd.load(
-      adUnitId: getAdUnitId('app_open', AdHelper.appOpenAdUnitId),
+      adUnitId: adUnitId,
       request: const AdRequest(),
+      orientation: AppOpenAd.orientationPortrait,
       adLoadCallback: AppOpenAdLoadCallback(
         onAdLoaded: (ad) {
           _appOpenAd = ad;
+          _isAppOpenLoading = false;
         },
         onAdFailedToLoad: (error) {
+          _logger.e('App Open Ad Failed to Load: ${error.message}');
           _appOpenAd = null;
+          _isAppOpenLoading = false;
         },
       ),
     );
@@ -146,7 +159,7 @@ class AdsService {
   void showAppOpenAdIfAvailable() async {
     final shouldShow = await shouldShowAdByFrequency('AppOpenAd');
     if (!shouldShow || _isShowingAd || _appOpenAd == null) {
-      if (!shouldShow) _logger.w('Skipping App Open: Frequency cap');
+      if (_appOpenAd == null) loadAppOpenAd();
       return;
     }
 

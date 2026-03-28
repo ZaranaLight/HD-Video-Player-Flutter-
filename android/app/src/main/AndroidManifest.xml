@@ -15,9 +15,7 @@
         android:label="mx_player"
         android:requestLegacyExternalStorage="true">
 
-        <meta-data
-            android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-6062872451360941~9114048201" />
+      
 
         <activity
             android:name=".MainActivity"
@@ -36,9 +34,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-6062872451360941~5646613198" />
     </application>
     <queries>
         <intent>
