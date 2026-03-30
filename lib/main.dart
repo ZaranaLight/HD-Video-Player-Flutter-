@@ -1,6 +1,9 @@
+import 'dart:io';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:photo_manager/photo_manager.dart' as pm;
 import 'bloc/media_bloc.dart';
 import 'bloc/media_event.dart';
 import 'bloc/media_state.dart';
@@ -74,7 +77,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           AdsService().showAppOpenAdIfAvailable();
         }
       } else {
-        // App was never paused (first launch scenario)
         AdsService().showAppOpenAdIfAvailable();
       }
     }
@@ -84,9 +86,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return MultiBlocProvider(
       providers: [
-        BlocProvider(create: (context) => MediaBloc()..add(LoadMediaFolders())),
+        BlocProvider(create: (context) => MediaBloc()),
         BlocProvider(create: (context) => NavBloc()),
-        BlocProvider(create: (context) => CleanerCubit()..loadAssets()),
+        BlocProvider(create: (context) => CleanerCubit()),
       ],
       child: MaterialApp(
         title: 'MX Player Clone',
@@ -96,9 +98,115 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           primaryColor: Colors.blue,
           scaffoldBackgroundColor: Colors.black,
         ),
-        home: const AppContainer(),
+        home: const PermissionGate(),
       ),
     );
+  }
+}
+
+class PermissionGate extends StatefulWidget {
+  const PermissionGate({super.key});
+
+  @override
+  State<PermissionGate> createState() => _PermissionGateState();
+}
+
+class _PermissionGateState extends State<PermissionGate> {
+  bool _isChecking = true;
+  bool _hasPermission = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkPermission();
+  }
+
+  Future<void> _checkPermission() async {
+    final state = await pm.PhotoManager.requestPermissionExtend();
+    if (state.isAuth) {
+      _grantAccess();
+    } else {
+      setState(() {
+        _isChecking = false;
+        _hasPermission = false;
+      });
+    }
+  }
+
+  Future<void> _requestPermission() async {
+    final state = await pm.PhotoManager.requestPermissionExtend();
+    
+    // For Android 11+ (API 30+), manageExternalStorage might be needed for some deletions
+    if (Platform.isAndroid) {
+      await Permission.manageExternalStorage.request();
+    }
+
+    if (state.isAuth) {
+      _grantAccess();
+    } else {
+      // Still denied, maybe show a toast or stay on this screen
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Permission required to show media")),
+      );
+    }
+  }
+
+  void _grantAccess() {
+    context.read<MediaBloc>().add(LoadMediaFolders());
+    context.read<CleanerCubit>().loadAssets();
+    setState(() {
+      _isChecking = false;
+      _hasPermission = true;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isChecking) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    if (!_hasPermission) {
+      return Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.security, size: 80, color: Colors.blue),
+                const SizedBox(height: 24),
+                const Text(
+                  "Media Access Required",
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 16),
+                  Text(
+                  "This app needs your permission to scan and show photos and videos from your device.",
+                  textAlign:TextAlign.center,
+                  style: TextStyle(color: Colors.grey),
+                ),
+                const SizedBox(height: 32),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _requestPermission,
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.all(16),
+                      backgroundColor: Colors.blue,
+                      foregroundColor: Colors.white,
+                    ),
+                    child: const Text("Allow Access"),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return const AppContainer();
   }
 }
 
@@ -274,10 +382,10 @@ class _FolderListScreenState extends State<FolderListScreen> {
         slivers.add(
           SliverList(
             delegate: SliverChildBuilderDelegate((context, index) {
-              final folder = chunk[index];
+              final asset = chunk[index];
               return FolderListItem(
-                folder: folder,
-                onTap: () => _onFolderTap(folder),
+                folder: asset,
+                onTap: () => _onFolderTap(asset),
               );
             }, childCount: chunk.length),
           ),
