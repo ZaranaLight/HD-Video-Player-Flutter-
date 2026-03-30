@@ -20,7 +20,7 @@ class EaseCleanerScreen extends StatefulWidget {
 
 class _EaseCleanerScreenState extends State<EaseCleanerScreen> {
   final CardSwiperController _controller = CardSwiperController();
-  int _currentIndex = 0;
+
 
   @override
   void initState() {
@@ -137,12 +137,17 @@ class _EaseCleanerScreenState extends State<EaseCleanerScreen> {
               children: [
                 Expanded(
                   child: CardSwiper(
+                    key: ValueKey(state.assets.isNotEmpty ? state.assets.first.id : 'empty'),
                     controller: _controller,
                     cardsCount: state.assets.length,
                     initialIndex: 0,
                     numberOfCardsDisplayed: min(state.assets.length, 3),
                     onSwipe: (previousIndex, currentIndex, direction) async {
                       final asset = state.assets[previousIndex];
+                      
+                      // Allow swipe animation to finish before rebuilding the swiper
+                      await Future.delayed(const Duration(milliseconds: 300));
+                      
                       if (direction == CardSwiperDirection.left) {
                         final cubit = context.read<CleanerCubit>();
                         final skip = cubit.skipDeleteConfirmation;
@@ -150,14 +155,12 @@ class _EaseCleanerScreenState extends State<EaseCleanerScreen> {
                           final confirm = await _showDeleteDialog();
                           if (!confirm || !mounted) return false;
                         }
-                        await cubit.deleteAsset(asset);
+                        // Don't await here so the UI remains fluid while the system dialog pops up
+                        cubit.deleteAsset(asset);
                       } else if (direction == CardSwiperDirection.right) {
                         context.read<CleanerCubit>().keepAsset(asset);
                       }
                       
-                      if (currentIndex != null && mounted) {
-                        setState(() => _currentIndex = currentIndex);
-                      }
                       return true;
                     },
                     cardBuilder: (context, index, horizontalThresholdPercentage, verticalThresholdPercentage) {

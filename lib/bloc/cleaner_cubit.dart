@@ -69,19 +69,24 @@ class CleanerCubit extends Cubit<CleanerState> {
 
   Future<void> deleteAsset(AssetEntity asset) async {
     if (state is CleanerLoaded) {
+      final oldAssets = List<AssetEntity>.from((state as CleanerLoaded).assets);
+      final currentAssets = List<AssetEntity>.from(oldAssets);
+      
+      // OPTIMISTIC UPDATE: Remove from list immediately to avoid skipping indices
+      currentAssets.remove(asset);
+      _updateState(currentAssets);
+
       try {
-        // We always use photo_manager's editor as it's safer for OS compliance.
+        // photo_manager triggers a system dialog on Android 10+
         final List<String> result = await PhotoManager.editor.deleteWithIds([asset.id]);
-        if (result.isNotEmpty) {
-          final currentAssets = List<AssetEntity>.from((state as CleanerLoaded).assets);
-          currentAssets.remove(asset);
-          _updateState(currentAssets);
+        
+        if (result.isEmpty) {
+          // USER DENIED: Put the asset back into the list
+          _updateState(oldAssets);
         }
       } catch (e) {
-        // Fallback for UI responsiveness
-        final currentAssets = List<AssetEntity>.from((state as CleanerLoaded).assets);
-        currentAssets.remove(asset);
-        _updateState(currentAssets);
+        // ERROR: Restore state
+        _updateState(oldAssets);
       }
     }
   }
